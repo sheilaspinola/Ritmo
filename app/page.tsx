@@ -162,13 +162,14 @@ export default function Home() {
     opts?: { editAllGroup?: boolean; groupId?: string; baseId?: string }
   ) {
     setState((prev) => {
+      // ✅ EDITAR TODAS AS FIXAS DO GRUPO
       if (opts?.editAllGroup && opts.groupId) {
+        const groupId = opts.groupId as string; // garante para o TS
         const patch = tasks[0];
 
         const updatedTasks = prev.tasks.map((t) => {
-          if (t.repeat?.groupId !== opts.groupId) return t;
+          if (t.repeat?.groupId !== groupId) return t;
 
-          // mantém o dayKey de cada instância
           return {
             ...t,
             title: patch.title,
@@ -181,40 +182,44 @@ export default function Home() {
             repeat: patch.repeat
               ? {
                   enabled: true,
-                  groupId: opts.groupId,
+                  groupId, // ✅ string garantida
                   days: patch.repeat.days,
                 }
               : undefined,
           };
         });
 
-        // se o grupo mudou os "days", remover instâncias que não deveriam mais existir e criar as que faltam
         const newDays = patch.repeat?.enabled ? patch.repeat.days : null;
 
         if (!newDays) {
-          // virou "não fixa": não mexe em instâncias automaticamente aqui
           return { ...prev, tasks: updatedTasks };
         }
 
-        const still = updatedTasks.filter((t) => t.repeat?.groupId !== opts.groupId);
-        const groupTasks = updatedTasks.filter((t) => t.repeat?.groupId === opts.groupId);
+        const still = updatedTasks.filter((t) => t.repeat?.groupId !== groupId);
+        const groupTasks = updatedTasks.filter((t) => t.repeat?.groupId === groupId);
 
         const haveDays = new Set(groupTasks.map((t) => t.dayKey));
         const wantDays = new Set(newDays);
 
         const filteredGroup = groupTasks.filter((t) => wantDays.has(t.dayKey));
 
+        // ✅ cria tarefas que faltam, mantendo repeat.groupId como string
+        const template = groupTasks[0];
         const missing = newDays
           .filter((d) => !haveDays.has(d))
           .map((d) => ({
-            ...groupTasks[0],
+            ...template,
             id: uid(),
             dayKey: d,
+            repeat: template.repeat
+              ? { ...template.repeat, groupId } // ✅ força string
+              : undefined,
           }));
 
         return { ...prev, tasks: [...missing, ...filteredGroup, ...still] };
       }
 
+      // ✅ EDITAR UMA TAREFA
       if (tasks.length === 1 && opts?.baseId) {
         const updated = tasks[0];
         return {
@@ -223,6 +228,7 @@ export default function Home() {
         };
       }
 
+      // ✅ ADICIONAR NOVAS
       return {
         ...prev,
         tasks: [...tasks, ...prev.tasks],
@@ -264,7 +270,7 @@ export default function Home() {
     setState((prev) => ({
       ...prev,
       tasks: [task, ...prev.tasks],
-      goals: (prev.goals || []).filter((g) => g.id !== goal.id), // remove da lista após agendar
+      goals: (prev.goals || []).filter((g) => g.id !== goal.id),
     }));
 
     setSelectedDay(dayKey);

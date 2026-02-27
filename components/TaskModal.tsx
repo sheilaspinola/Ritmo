@@ -91,7 +91,6 @@ export function TaskModal({
     setRepeatDays([]);
   }, [open, editingTask, selectedDay, presetStartTime, defaultNotifyMin]);
 
-  // quando liga repeat no modo "novo", já coloca o dia selecionado como padrão (mas deixa desmarcar)
   useEffect(() => {
     if (!open) return;
     if (editingTask) return;
@@ -139,8 +138,8 @@ export function TaskModal({
     );
   }
 
-  function buildTaskForDay(d: DayKey, groupId?: string, daysList?: DayKey[]): Task {
-    const days = daysList ?? [];
+  // ✅ Agora groupId é OBRIGATÓRIO quando a tarefa for fixa
+  function buildFixedTaskForDay(d: DayKey, groupId: string, daysList: DayKey[]): Task {
     return {
       id: uid(),
       title: title.trim(),
@@ -153,14 +152,11 @@ export function TaskModal({
       done: false,
       notify,
       notifyMin: notify ? notifyMin : undefined,
-      repeat:
-        repeatEnabled && groupId
-          ? {
-              enabled: true,
-              days,
-              groupId,
-            }
-          : undefined,
+      repeat: {
+        enabled: true,
+        days: daysList,
+        groupId, // ✅ sempre string
+      },
     };
   }
 
@@ -184,19 +180,18 @@ export function TaskModal({
 
       // se for fixa e usuário quer editar dias, mantém repeatDays atualizado
       if (isEditingFixed && editingTask.repeat?.groupId) {
-        const daysList = repeatEnabled
-          ? Array.from(new Set(repeatDays))
-          : []; // se desligar repeat, vira normal
+        const groupId = editingTask.repeat.groupId; // ✅ aqui é string
+        const daysList = repeatEnabled ? Array.from(new Set(repeatDays)) : [];
 
-        const patch = {
+        const patch: Task = {
           ...updated,
           repeat: repeatEnabled
-            ? { enabled: true, days: daysList, groupId: editingTask.repeat.groupId }
+            ? { enabled: true, days: daysList, groupId }
             : undefined,
         };
 
         if (editAllGroup) {
-          onSaveTasks([patch], { editAllGroup: true, groupId: editingTask.repeat.groupId });
+          onSaveTasks([patch], { editAllGroup: true, groupId });
         } else {
           onSaveTasks([patch], { baseId: editingTask.id });
         }
@@ -214,10 +209,10 @@ export function TaskModal({
     // NOVA FIXA
     if (repeatEnabled) {
       const daysList = Array.from(new Set(repeatDays));
-      if (daysList.length === 0) return; // precisa selecionar ao menos 1 dia
+      if (daysList.length === 0) return;
 
       const groupId = uid();
-      const tasks = daysList.map((d) => buildTaskForDay(d, groupId, daysList));
+      const tasks = daysList.map((d) => buildFixedTaskForDay(d, groupId, daysList));
       onSaveTasks(tasks);
       onClose();
       return;
@@ -272,7 +267,7 @@ export function TaskModal({
               className="border border-slate-200 rounded-xl p-2 text-sm"
               value={dayKey}
               onChange={(e) => setDayKey(e.target.value as DayKey)}
-              disabled={repeatEnabled && !editingTask} // evita confusão (fixa define pelos botões)
+              disabled={repeatEnabled && !editingTask}
             >
               {DAYS.map((d) => (
                 <option key={d.key} value={d.key}>
@@ -352,7 +347,7 @@ export function TaskModal({
             </div>
           </div>
 
-          {/* FIXA (novo e edição) */}
+          {/* FIXA */}
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
             <label className="flex items-center gap-2 text-sm font-semibold text-slate-800">
               <input
@@ -403,7 +398,6 @@ export function TaskModal({
             )}
           </div>
 
-          {/* EDITAR GRUPO (fixas) */}
           {isEditingFixed && (
             <label className="flex items-center gap-2 text-sm text-slate-700 border border-slate-200 rounded-xl px-3 py-2">
               <input
@@ -415,7 +409,6 @@ export function TaskModal({
             </label>
           )}
 
-          {/* CONFLITO */}
           {conflicts.length > 0 && (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
               <div className="text-sm font-semibold text-amber-800">
